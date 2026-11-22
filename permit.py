@@ -425,6 +425,36 @@ class PermitToken:
     def nonces(self, owner: str) -> int:
         return self._nonces.get(owner, 0)
 
+    def spenders_of(self, owner: str) -> list[str]:
+        """Spenders holding a nonzero allowance from ``owner``.
+
+        Sorted, so the result is stable. Useful when auditing or revoking
+        approvals: a spender disappears from the list once its allowance
+        is spent down to zero.
+
+        >>> alice_priv, alice = keypair(1)
+        >>> bob = "0x" + "22" * 20
+        >>> carol = "0x" + "33" * 20
+        >>> token = PermitToken("Demo Token", "DMT", chain_id=1,
+        ...                     verifying_contract="0x" + "11" * 20)
+        >>> token.spenders_of(alice)
+        []
+        >>> token.mint(alice, 1000)
+        >>> v, r, s = sign_permit(alice_priv, token, bob, 250, deadline=5000)
+        >>> token.permit(alice, bob, 250, 5000, v, r, s, now=100)
+        True
+        >>> token.spenders_of(alice) == [bob]
+        True
+        >>> token.transfer_from(bob, alice, carol, 250)
+        True
+        >>> token.spenders_of(alice)
+        []
+        """
+        return sorted(
+            spender for (own, spender), value in self._allowances.items()
+            if own == owner and value > 0
+        )
+
     # -- transfers --------------------------------------------------------
     def transfer(self, sender: str, to: str, amount: int) -> bool:
         if amount < 0 or self.balance_of(sender) < amount:
